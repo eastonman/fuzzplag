@@ -2,7 +2,7 @@
  * @Author: Easton Man manyang.me@outlook.com
  * @Date: 2022-12-07 12:57:24
  * @LastEditors: Easton Man manyang.me@outlook.com
- * @LastEditTime: 2022-12-07 16:37:30
+ * @LastEditTime: 2022-12-07 18:20:43
  * @FilePath: /fuzzplag/main.go
  * @Description: Main entry point
  */
@@ -12,6 +12,7 @@ import (
 	"encoding/csv"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/eastonman/fuzzplag/utils"
@@ -19,6 +20,29 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
+
+type outputRow struct {
+	Source   string
+	Dest     string
+	Distance string
+}
+type output struct {
+	Rows []outputRow
+}
+
+func (o *output) Len() int {
+	return len(o.Rows)
+}
+
+func (o *output) Swap(i, j int) {
+	t := o.Rows[i]
+	o.Rows[i] = o.Rows[j]
+	o.Rows[j] = t
+}
+
+func (o *output) Less(i, j int) bool {
+	return o.Rows[i].Source < o.Rows[j].Source
+}
 
 func main() {
 	var err error
@@ -102,6 +126,10 @@ func main() {
 	outputWriter := csv.NewWriter(outputFile)
 	outputWriter.Write([]string{"Source", "Dest", "Distance"}) // Header
 	defer outputWriter.Flush()
+
+	output := output{
+		Rows: make([]outputRow, 0),
+	}
 	for _, a := range filteredHash {
 		for _, b := range filteredHash {
 			if a.Path[0:9] == b.Path[0:9] { // Ignore same person
@@ -113,12 +141,16 @@ func main() {
 			}
 
 			if distance <= distanceThreshold {
-				err = outputWriter.Write([]string{a.Path, b.Path, strconv.Itoa(distance)})
-				if err != nil {
-					log.Fatalf("Error writing to file %s: %s", outputFilePath, err.Error())
-				}
+				output.Rows = append(output.Rows, outputRow{a.Path, b.Path, strconv.Itoa(distance)})
 			}
 		}
 	}
+	sort.Sort(&output)
+	for _, v := range output.Rows {
+		err = outputWriter.Write([]string{v.Source, v.Dest, v.Distance})
+	}
 
+	if err != nil {
+		log.Fatalf("Error writing to file %s: %s", outputFilePath, err.Error())
+	}
 }

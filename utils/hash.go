@@ -2,7 +2,7 @@
  * @Author: Easton Man manyang.me@outlook.com
  * @Date: 2022-12-07 13:14:20
  * @LastEditors: Easton Man manyang.me@outlook.com
- * @LastEditTime: 2022-12-07 16:35:05
+ * @LastEditTime: 2022-12-07 18:37:08
  * @FilePath: /fuzzplag/utils/hash.go
  * @Description:
  */
@@ -18,9 +18,12 @@ import (
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/types"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 var FileThreshold int = 256
+var gbk = simplifiedchinese.GB18030.NewDecoder()
 
 type Hash struct {
 	Path string
@@ -32,13 +35,15 @@ func InMemoryHash(data *bytes.Buffer, path string) []Hash {
 	if err != nil {
 		log.Warnf("Error opening in-memory zip file: %s", err.Error())
 	}
+
 	hash := make([]Hash, 0)
 	// Loop through all input archive
 	for _, fd := range archive.File {
+
 		if fd.FileInfo().IsDir() { // Ignore directories
 			continue
 		}
-		log.Debug(fd.Name)
+
 		f, err := fd.Open()
 		if err != nil {
 			log.Warnf("Error opening in-memory file: %s", err.Error())
@@ -46,6 +51,12 @@ func InMemoryHash(data *bytes.Buffer, path string) []Hash {
 		defer f.Close()
 		fileBuf := bytes.NewBuffer(nil)
 		io.Copy(fileBuf, f)
+
+		// Generate file name
+		fileName := fd.Name
+		if fd.NonUTF8 {
+			fileName, _, _ = transform.String(gbk, fd.Name)
+		}
 
 		if fileBuf.Len() < FileThreshold { // Ignore empty or small files
 			continue
@@ -65,11 +76,11 @@ func InMemoryHash(data *bytes.Buffer, path string) []Hash {
 			// log.Warnf("File type not supported: %s", fileKind.MIME.Type)
 			hashString, err := tlsh.HashBytes(fileBuf.Bytes())
 			if err != nil {
-				log.Warnf("Error hashing in-memory file %s: %s", fd.Name, err.Error())
+				log.Warnf("Error hashing in-memory file %s: %s", fileName, err.Error())
 				continue
 			}
 			hash = append(hash, Hash{
-				Path: path + fd.Name,
+				Path: path + fileName,
 				Hash: hashString.String(),
 			})
 			log.WithFields(log.Fields{
