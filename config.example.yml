@@ -1,0 +1,24 @@
+input:
+  path: ./input.zip
+
+output:
+  path: ./out.csv
+
+parallel: 6
+distance-threshold: 20
+smallfile-threshold: 128 # in bytes
+
+accept-patterns:
+  - '\.v$'
+  - '\.docx$'
+  - '\.doc$'
+  - '\.pdf$'
+  - '\.txt$'
+ignore-patterns:
+  - '\.ip_user_files/'
+  - '\.runs/impl_'
+  - '\.runs/synth_'
+  - '\.sim/sim_'
+  - "dff"
+  - "testbench"
+  - "textbench"
