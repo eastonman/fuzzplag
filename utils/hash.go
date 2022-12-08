@@ -2,7 +2,7 @@
  * @Author: Easton Man manyang.me@outlook.com
  * @Date: 2022-12-07 13:14:20
  * @LastEditors: Easton Man manyang.me@outlook.com
- * @LastEditTime: 2022-12-07 18:37:08
+ * @LastEditTime: 2022-12-08 09:28:26
  * @FilePath: /fuzzplag/utils/hash.go
  * @Description:
  */
@@ -27,7 +27,7 @@ var gbk = simplifiedchinese.GB18030.NewDecoder()
 
 type Hash struct {
 	Path string
-	Hash string
+	Hash *tlsh.Tlsh
 }
 
 func InMemoryHash(data *bytes.Buffer, path string) []Hash {
@@ -81,7 +81,7 @@ func InMemoryHash(data *bytes.Buffer, path string) []Hash {
 			}
 			hash = append(hash, Hash{
 				Path: path + fileName,
-				Hash: hashString.String(),
+				Hash: hashString,
 			})
 			log.WithFields(log.Fields{
 				"Path": fd.Name,

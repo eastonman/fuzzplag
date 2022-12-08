@@ -2,7 +2,7 @@
  * @Author: Easton Man manyang.me@outlook.com
  * @Date: 2022-12-07 12:57:24
  * @LastEditors: Easton Man manyang.me@outlook.com
- * @LastEditTime: 2022-12-07 18:20:43
+ * @LastEditTime: 2022-12-08 10:05:53
  * @FilePath: /fuzzplag/main.go
  * @Description: Main entry point
  */
@@ -16,7 +16,6 @@ import (
 	"strconv"
 
 	"github.com/eastonman/fuzzplag/utils"
-	"github.com/hbollon/go-edlib"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -62,31 +61,37 @@ func main() {
 	// Setup logging
 	log.SetLevel(logLevel)
 
+	viper.SetDefault("patterns.binary", "^$")
+	viper.SetDefault("patterns.text", "^$")
+	viper.SetDefault("patterns.ignore", "^$")
+
 	inputFilePath := viper.GetString("input.path")
 	outputFilePath := viper.GetString("output.path")
-	acceptPattern := viper.GetStringSlice("accept-patterns")
-	ignorePattern := viper.GetStringSlice("ignore-patterns")
+	textPattern := viper.GetString("patterns.text")
+	binaryPattern := viper.GetString("patterns.binary")
+	ignorePattern := viper.GetStringSlice("patterns.ignore")
 
-	utils.FileThreshold = viper.GetInt("smallfile-threshold")
+	utils.FileThreshold = viper.GetInt("threshold.smallfile")
 	parallelNum := viper.GetInt("parallel")
-	distanceThreshold := viper.GetInt("distance-threshold")
+	textThreshold := viper.GetInt("threshold.text")
+	binaryThreshold := viper.GetInt("threshold.binary")
 
 	// Build Regex
 	ignoreEngine := make([]*regexp.Regexp, 0)
-	acceptEngine := make([]*regexp.Regexp, 0)
+	textEngine, err := regexp.Compile(textPattern)
+	if err != nil {
+		log.Fatalf("Error compiling regex %s: %s", textPattern, err.Error())
+	}
+	binaryEngine, err := regexp.Compile(binaryPattern)
+	if err != nil {
+		log.Fatalf("Error compiling regex %s: %s", binaryPattern, err.Error())
+	}
 	for _, p := range ignorePattern {
 		r, err := regexp.Compile(p)
 		if err != nil {
 			log.Fatalf("Error compiling regex %s: %s", p, err.Error())
 		}
 		ignoreEngine = append(ignoreEngine, r)
-	}
-	for _, p := range acceptPattern {
-		r, err := regexp.Compile(p)
-		if err != nil {
-			log.Fatalf("Error compiling regex %s: %s", p, err.Error())
-		}
-		acceptEngine = append(acceptEngine, r)
 	}
 
 	hash := utils.HashForZip(inputFilePath, parallelNum)
@@ -96,16 +101,14 @@ func main() {
 	filteredHash := make([]utils.Hash, 0)
 	for _, h := range hash {
 		ignore := true
-		for _, r := range acceptEngine {
-			if r.MatchString(h.Path) {
-				ignore = false
-				break
-			}
-		}
-		if ignore {
+		// Match accept
+		if textEngine.MatchString(h.Path) || binaryEngine.MatchString(h.Path) {
+			ignore = false
+		} else {
 			continue
 		}
-		for _, r := range ignoreEngine { // March ignorePattern
+		// Match ignore
+		for _, r := range ignoreEngine {
 			if r.MatchString(h.Path) {
 				ignore = true
 				break
@@ -135,13 +138,15 @@ func main() {
 			if a.Path[0:9] == b.Path[0:9] { // Ignore same person
 				continue
 			}
-			distance, err := edlib.HammingDistance(a.Hash, b.Hash)
-			if err != nil {
-				log.Warnf("Error computing distance: %s", err.Error())
-			}
-
-			if distance <= distanceThreshold {
-				output.Rows = append(output.Rows, outputRow{a.Path, b.Path, strconv.Itoa(distance)})
+			distance := a.Hash.Diff(b.Hash)
+			if binaryEngine.MatchString(a.Path) {
+				if distance <= binaryThreshold {
+					output.Rows = append(output.Rows, outputRow{a.Path, b.Path, strconv.Itoa(distance)})
+				}
+			} else {
+				if distance <= textThreshold {
+					output.Rows = append(output.Rows, outputRow{a.Path, b.Path, strconv.Itoa(distance)})
+				}
 			}
 		}
 	}
